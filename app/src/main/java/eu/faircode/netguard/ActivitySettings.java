@@ -1255,9 +1255,6 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
         xmlImport(handler.apply, getSharedPreferences("apply", Context.MODE_PRIVATE));
         xmlImport(handler.notify, getSharedPreferences("notify", Context.MODE_PRIVATE));
 
-        // Upgrade imported settings
-        Receiver.upgrade(true, this);
-
         // Refresh UI
         prefs.edit().putBoolean("imported", true).apply();
         prefs.registerOnSharedPreferenceChangeListener(this);

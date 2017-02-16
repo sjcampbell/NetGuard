@@ -42,7 +42,6 @@ import android.graphics.Typeface;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.TrafficStats;
-import android.net.Uri;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.Handler;
@@ -71,21 +70,15 @@ import android.util.Log;
 import android.util.TypedValue;
 import android.widget.RemoteViews;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.net.URL;
 import java.net.UnknownHostException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -101,8 +94,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import javax.net.ssl.HttpsURLConnection;
 
 public class ServiceSinkhole extends VpnService implements SharedPreferences.OnSharedPreferenceChangeListener {
     private static final String TAG = "NetGuard.Service";
@@ -384,9 +375,6 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
                     ruleset.putExtra(ActivityMain.EXTRA_CONNECTED, cmd == Command.stop ? false : last_connected);
                     ruleset.putExtra(ActivityMain.EXTRA_METERED, cmd == Command.stop ? false : last_metered);
                     LocalBroadcastManager.getInstance(ServiceSinkhole.this).sendBroadcast(ruleset);
-
-                    // Update widgets
-                    Widget.updateWidgets(ServiceSinkhole.this);
                 }
 
             } catch (Throwable ex) {
@@ -406,7 +394,6 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
 
                         // Disable firewall
                         prefs.edit().putBoolean("enabled", false).apply();
-                        Widget.updateWidgets(ServiceSinkhole.this);
                     }
                 } else
                     showErrorNotification(ex.toString());
@@ -436,8 +423,9 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
 
                 last_builder = getBuilder(listAllowed, listRule);
                 vpn = startVPN(last_builder);
-                if (vpn == null)
+                if (vpn == null) {
                     throw new IllegalStateException(getString((R.string.msg_start_failed)));
+                }
 
                 startNative(vpn, listAllowed, listRule);
 
@@ -447,6 +435,7 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
         }
 
         private void reload() {
+            Log.d(TAG, "reload: reloading Vpn Service.");
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ServiceSinkhole.this);
 
             if (state != State.enforcing) {
@@ -547,11 +536,6 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
 
             // Clear expired DNS records
             DatabaseHelper.getInstance(ServiceSinkhole.this).cleanupDns();
-
-            // Check for update
-            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ServiceSinkhole.this);
-            if (!Util.isPlayStoreInstall(ServiceSinkhole.this) && prefs.getBoolean("update_check", true))
-                checkUpdate();
         }
 
         private void watchdog(Intent intent) {
@@ -561,52 +545,6 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
                     Log.e(TAG, "Service was killed");
                     start();
                 }
-            }
-        }
-
-        private void checkUpdate() {
-            StringBuilder json = new StringBuilder();
-            HttpsURLConnection urlConnection = null;
-            try {
-                URL url = new URL("https://api.github.com/repos/M66B/NetGuard/releases/latest");
-                urlConnection = (HttpsURLConnection) url.openConnection();
-                BufferedReader br = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
-
-                String line;
-                while ((line = br.readLine()) != null)
-                    json.append(line);
-
-            } catch (Throwable ex) {
-                Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-            } finally {
-                if (urlConnection != null)
-                    urlConnection.disconnect();
-            }
-
-            try {
-                JSONObject jroot = new JSONObject(json.toString());
-                if (jroot.has("tag_name") && jroot.has("assets")) {
-                    JSONArray jassets = jroot.getJSONArray("assets");
-                    if (jassets.length() > 0) {
-                        JSONObject jasset = jassets.getJSONObject(0);
-                        if (jasset.has("name") && jasset.has("browser_download_url")) {
-                            String version = jroot.getString("tag_name");
-                            String name = jasset.getString("name");
-                            String url = jasset.getString("browser_download_url");
-                            Log.i(TAG, "Tag " + version + " name " + name + " url " + url);
-
-                            Version current = new Version(Util.getSelfVersionName(ServiceSinkhole.this));
-                            Version available = new Version(version);
-                            if (current.compareTo(available) < 0) {
-                                Log.i(TAG, "Update available from " + current + " to " + available);
-                                showUpdateNotification(name, url);
-                            } else
-                                Log.i(TAG, "Up-to-date current version " + current);
-                        }
-                    }
-                }
-            } catch (JSONException ex) {
-                Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
             }
         }
     }
@@ -1009,8 +947,11 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     private ParcelFileDescriptor startVPN(Builder builder) throws SecurityException {
         try {
+            Log.d(TAG, "startVPN: establishing vpn service.");
             return builder.establish();
         } catch (SecurityException ex) {
+            Log.e(TAG, "Security exception while establishing VPN Service");
+            Log.e(TAG, Log.getStackTraceString(ex));
             throw ex;
         } catch (Throwable ex) {
             Log.e(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
@@ -1493,7 +1434,6 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
 
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
             prefs.edit().putBoolean("enabled", false).apply();
-            Widget.updateWidgets(this);
         }
     }
 
@@ -1892,6 +1832,7 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.d(TAG, "onStartCommand. Starting service.");
         Log.i(TAG, "Received " + intent);
         Util.logExtras(intent);
 
@@ -1957,9 +1898,6 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
         // Apply rules
         ServiceSinkhole.reload("notification", ServiceSinkhole.this);
 
-        // Update notification
-        Receiver.notifyNewApplication(uid, ServiceSinkhole.this);
-
         // Update UI
         Intent ruleset = new Intent(ActivityMain.ACTION_RULES_CHANGED);
         LocalBroadcastManager.getInstance(ServiceSinkhole.this).sendBroadcast(ruleset);
@@ -1975,7 +1913,6 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
 
         // Feedback
         showDisabledNotification();
-        Widget.updateWidgets(this);
 
         super.onRevoke();
     }
@@ -2284,33 +2221,6 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
         NotificationManagerCompat.from(this).notify(uid + 10000, notification.build());
     }
 
-    private void showUpdateNotification(String name, String url) {
-        Intent download = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-        PendingIntent pi = PendingIntent.getActivity(this, 0, download, PendingIntent.FLAG_UPDATE_CURRENT);
-
-        TypedValue tv = new TypedValue();
-        getTheme().resolveAttribute(R.attr.colorPrimary, tv, true);
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
-                .setSmallIcon(R.drawable.ic_security_white_24dp)
-                .setContentTitle(getString(R.string.app_name))
-                .setContentText(getString(R.string.msg_update))
-                .setContentIntent(pi)
-                .setColor(tv.data)
-                .setOngoing(false)
-                .setAutoCancel(true);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            builder.setCategory(Notification.CATEGORY_STATUS)
-                    .setVisibility(Notification.VISIBILITY_SECRET);
-        }
-
-        NotificationCompat.BigTextStyle notification = new NotificationCompat.BigTextStyle(builder);
-        notification.bigText(getString(R.string.msg_update));
-        notification.setSummaryText(name);
-
-        NotificationManagerCompat.from(this).notify(NOTIFY_UPDATE, notification.build());
-    }
-
     private void removeWarningNotifications() {
         NotificationManagerCompat.from(this).cancel(NOTIFY_DISABLED);
         NotificationManagerCompat.from(this).cancel(NOTIFY_AUTOSTART);
@@ -2451,6 +2361,8 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
         Intent intent = new Intent(context, ServiceSinkhole.class);
         intent.putExtra(EXTRA_COMMAND, Command.start);
         intent.putExtra(EXTRA_REASON, reason);
+
+        Log.d(TAG, "Starting service intent.");
         context.startService(intent);
     }
 
