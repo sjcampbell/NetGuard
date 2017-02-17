@@ -43,7 +43,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.preference.PreferenceManager;
-import android.support.v4.content.ContextCompat;
 import android.support.v4.net.ConnectivityManagerCompat;
 import android.support.v7.app.AlertDialog;
 import android.telephony.SubscriptionInfo;
@@ -66,10 +65,8 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
-import java.net.HttpURLConnection;
 import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
-import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.DateFormat;
@@ -499,32 +496,6 @@ public class Util {
     }
 
     private static Map<String, String> mapIPOrganization = new HashMap<>();
-
-    public static String getOrganization(String ip) throws Exception {
-        synchronized (mapIPOrganization) {
-            if (mapIPOrganization.containsKey(ip))
-                return mapIPOrganization.get(ip);
-        }
-        BufferedReader reader = null;
-        try {
-            URL url = new URL("http://ipinfo.io/" + ip + "/org");
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setReadTimeout(15 * 1000);
-            connection.connect();
-            reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            String organization = reader.readLine();
-            if ("undefined".equals(organization))
-                organization = null;
-            synchronized (mapIPOrganization) {
-                mapIPOrganization.put(ip, organization);
-            }
-            return organization;
-        } finally {
-            if (reader != null)
-                reader.close();
-        }
-    }
 
     public static String md5(String text, String salt) throws NoSuchAlgorithmException, UnsupportedEncodingException {
         // MD5

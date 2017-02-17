@@ -290,7 +290,6 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
         Preference pref_block_domains = screen.findPreference("use_hosts");
         Preference pref_hosts_import = screen.findPreference("hosts_import");
         EditTextPreference pref_hosts_url = (EditTextPreference) screen.findPreference("hosts_url");
-        final Preference pref_hosts_download = screen.findPreference("hosts_download");
 
         if (Util.isPlayStoreInstall(this)) {
             Log.i(TAG, "Play store install");
@@ -299,15 +298,11 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
             cat_advanced.removePreference(pref_forwarding);
             cat_backup.removePreference(pref_hosts_import);
             cat_backup.removePreference(pref_hosts_url);
-            cat_backup.removePreference(pref_hosts_download);
-
         } else {
             String last_import = prefs.getString("hosts_last_import", null);
             String last_download = prefs.getString("hosts_last_download", null);
             if (last_import != null)
                 pref_hosts_import.setSummary(getString(R.string.msg_import_last, last_import));
-            if (last_download != null)
-                pref_hosts_download.setSummary(getString(R.string.msg_download_last, last_download));
 
             // Handle hosts import
             // https://github.com/Free-Software-for-Android/AdAway/wiki/HostsSources
@@ -322,52 +317,6 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
 
             // Handle hosts file download
             pref_hosts_url.setSummary(pref_hosts_url.getText());
-            pref_hosts_download.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
-                @Override
-                public boolean onPreferenceClick(Preference preference) {
-                    final File tmp = new File(getFilesDir(), "hosts.tmp");
-                    final File hosts = new File(getFilesDir(), "hosts.txt");
-                    EditTextPreference pref_hosts_url = (EditTextPreference) screen.findPreference("hosts_url");
-                    try {
-                        new DownloadTask(ActivitySettings.this, new URL(pref_hosts_url.getText()), tmp, new DownloadTask.Listener() {
-                            @Override
-                            public void onCompleted() {
-                                if (hosts.exists())
-                                    hosts.delete();
-                                tmp.renameTo(hosts);
-
-                                String last = SimpleDateFormat.getDateTimeInstance().format(new Date().getTime());
-                                prefs.edit().putString("hosts_last_download", last).apply();
-
-                                if (running) {
-                                    pref_hosts_download.setSummary(getString(R.string.msg_download_last, last));
-                                    Toast.makeText(ActivitySettings.this, R.string.msg_downloaded, Toast.LENGTH_LONG).show();
-                                }
-
-                                ServiceSinkhole.reload("hosts file download", ActivitySettings.this);
-                            }
-
-                            @Override
-                            public void onCancelled() {
-                                if (tmp.exists())
-                                    tmp.delete();
-                            }
-
-                            @Override
-                            public void onException(Throwable ex) {
-                                if (tmp.exists())
-                                    tmp.delete();
-
-                                if (running)
-                                    Toast.makeText(ActivitySettings.this, ex.getMessage(), Toast.LENGTH_LONG).show();
-                            }
-                        }).execute();
-                    } catch (MalformedURLException ex) {
-                        Toast.makeText(ActivitySettings.this, ex.toString(), Toast.LENGTH_LONG).show();
-                    }
-                    return true;
-                }
-            });
         }
 
         // Development
@@ -577,8 +526,6 @@ public class ActivitySettings extends AppCompatActivity implements SharedPrefere
                     requestPermissions(new String[]{Manifest.permission.READ_PHONE_STATE}, REQUEST_ROAMING_NATIONAL);
             } else
                 ServiceSinkhole.reload("changed " + name, this);
-
-
         } else if ("manage_system".equals(name)) {
             boolean manage = prefs.getBoolean(name, false);
             if (!manage)

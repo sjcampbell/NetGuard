@@ -52,7 +52,6 @@ public class AdapterLog extends CursorAdapter {
     private static String TAG = "NetGuard.Log";
 
     private boolean resolve;
-    private boolean organization;
     private int colID;
     private int colTime;
     private int colVersion;
@@ -76,10 +75,9 @@ public class AdapterLog extends CursorAdapter {
     private InetAddress vpn4 = null;
     private InetAddress vpn6 = null;
 
-    public AdapterLog(Context context, Cursor cursor, boolean resolve, boolean organization) {
+    public AdapterLog(Context context, Cursor cursor, boolean resolve) {
         super(context, cursor, 0);
         this.resolve = resolve;
-        this.organization = organization;
         colID = cursor.getColumnIndex("ID");
         colTime = cursor.getColumnIndex("time");
         colVersion = cursor.getColumnIndex("version");
@@ -118,10 +116,6 @@ public class AdapterLog extends CursorAdapter {
 
     public void setResolve(boolean resolve) {
         this.resolve = resolve;
-    }
-
-    public void setOrganization(boolean organization) {
-        this.organization = organization;
     }
 
     @Override
@@ -271,34 +265,6 @@ public class AdapterLog extends CursorAdapter {
 
         // Show organization
         tvOrganization.setVisibility(View.GONE);
-        if (organization) {
-            if (!isKnownAddress(daddr))
-                new AsyncTask<String, Object, String>() {
-                    @Override
-                    protected void onPreExecute() {
-                        ViewCompat.setHasTransientState(tvOrganization, true);
-                    }
-
-                    @Override
-                    protected String doInBackground(String... args) {
-                        try {
-                            return Util.getOrganization(args[0]);
-                        } catch (Throwable ex) {
-                            Log.w(TAG, ex.toString() + "\n" + Log.getStackTraceString(ex));
-                            return null;
-                        }
-                    }
-
-                    @Override
-                    protected void onPostExecute(String organization) {
-                        if (organization != null) {
-                            tvOrganization.setText(organization);
-                            tvOrganization.setVisibility(View.VISIBLE);
-                        }
-                        ViewCompat.setHasTransientState(tvOrganization, false);
-                    }
-                }.execute(daddr);
-        }
 
         // Show extra data
         if (TextUtils.isEmpty(data)) {

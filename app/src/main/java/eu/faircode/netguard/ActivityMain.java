@@ -47,10 +47,7 @@ import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.SearchView;
 import android.support.v7.widget.SwitchCompat;
-import android.text.SpannableStringBuilder;
-import android.text.Spanned;
 import android.text.method.LinkMovementMethod;
-import android.text.style.ImageSpan;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -628,27 +625,10 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
             }
         });
 
-        markPro(menu.findItem(R.id.menu_log), ActivityPro.SKU_LOG);
-        if (!IAB.isPurchasedAny(this))
-            markPro(menu.findItem(R.id.menu_pro), null);
-
         if (!Util.hasValidFingerprint(this) || getIntentInvite(this).resolveActivity(getPackageManager()) == null)
             menu.removeItem(R.id.menu_invite);
 
-        if (getIntentSupport().resolveActivity(getPackageManager()) == null)
-            menu.removeItem(R.id.menu_support);
-
         return true;
-    }
-
-    private void markPro(MenuItem menu, String sku) {
-        if (sku == null || !IAB.isPurchased(sku, this)) {
-            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-            boolean dark = prefs.getBoolean("dark_theme", false);
-            SpannableStringBuilder ssb = new SpannableStringBuilder("  " + menu.getTitle());
-            ssb.setSpan(new ImageSpan(this, dark ? R.drawable.ic_shopping_cart_white_24dp : R.drawable.ic_shopping_cart_black_24dp), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            menu.setTitle(ssb);
-        }
     }
 
     @Override
@@ -737,20 +717,12 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
                 startActivity(new Intent(this, ActivitySettings.class));
                 return true;
 
-            case R.id.menu_pro:
-                startActivity(new Intent(ActivityMain.this, ActivityPro.class));
-                return true;
-
             case R.id.menu_invite:
                 startActivityForResult(getIntentInvite(this), REQUEST_INVITE);
                 return true;
 
             case R.id.menu_legend:
                 menu_legend();
-                return true;
-
-            case R.id.menu_support:
-                startActivity(getIntentSupport());
                 return true;
 
             case R.id.menu_about:
@@ -1013,7 +985,6 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
         View view = inflater.inflate(R.layout.about, null, false);
         TextView tvVersionName = (TextView) view.findViewById(R.id.tvVersionName);
         TextView tvVersionCode = (TextView) view.findViewById(R.id.tvVersionCode);
-        Button btnRate = (Button) view.findViewById(R.id.btnRate);
         TextView tvLicense = (TextView) view.findViewById(R.id.tvLicense);
 
         // Show version
@@ -1048,15 +1019,6 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
             }
         });
 
-        // Handle rate
-        btnRate.setVisibility(getIntentRate(this).resolveActivity(getPackageManager()) == null ? View.GONE : View.VISIBLE);
-        btnRate.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                startActivity(getIntentRate(ActivityMain.this));
-            }
-        });
-
         // Show dialog
         dialogAbout = new AlertDialog.Builder(this)
                 .setView(view)
@@ -1078,19 +1040,6 @@ public class ActivityMain extends AppCompatActivity implements SharedPreferences
         intent.putExtra("com.google.android.gms.appinvite.MESSAGE", context.getString(R.string.msg_try));
         intent.putExtra("com.google.android.gms.appinvite.BUTTON_TEXT", context.getString(R.string.msg_try));
         // com.google.android.gms.appinvite.DEEP_LINK_URL
-        return intent;
-    }
-
-    private static Intent getIntentRate(Context context) {
-        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + context.getPackageName()));
-        if (intent.resolveActivity(context.getPackageManager()) == null)
-            intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + context.getPackageName()));
-        return intent;
-    }
-
-    private static Intent getIntentSupport() {
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setData(Uri.parse("https://github.com/M66B/NetGuard/blob/master/FAQ.md"));
         return intent;
     }
 
