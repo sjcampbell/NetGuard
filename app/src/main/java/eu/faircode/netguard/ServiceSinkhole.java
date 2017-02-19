@@ -37,6 +37,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Typeface;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.TrafficStats;
@@ -59,7 +60,11 @@ import android.telephony.PhoneStateListener;
 import android.telephony.ServiceState;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
+import android.text.Spannable;
+import android.text.SpannableString;
 import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
 import android.util.Log;
 import android.util.TypedValue;
 import android.widget.RemoteViews;
@@ -74,6 +79,8 @@ import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -574,6 +581,8 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
                     packet.dport = 0;
                 if (dh.updateAccess(packet, dname, -1)) {
                     lock.readLock().lock();
+                    if (mapNoNotify.containsKey(packet.uid) && mapNoNotify.get(packet.uid))
+                        showAccessNotification(packet.uid);
                     lock.readLock().unlock();
                 }
             }
@@ -1945,6 +1954,75 @@ public class ServiceSinkhole extends VpnService implements SharedPreferences.OnS
         prefs.unregisterOnSharedPreferenceChangeListener(this);
 
         super.onDestroy();
+    }
+
+    private void showAccessNotification(int uid) {
+        String name = TextUtils.join(", ", Util.getApplicationNames(uid, ServiceSinkhole.this));
+        Intent main = new Intent(ServiceSinkhole.this, ActivityMain.class);
+        main.putExtra(ActivityMain.EXTRA_SEARCH, Integer.toString(uid));
+        PendingIntent pi = PendingIntent.getActivity(ServiceSinkhole.this, uid + 10000, main, PendingIntent.FLAG_UPDATE_CURRENT);
+        TypedValue tv = new TypedValue();
+        getTheme().resolveAttribute(R.attr.colorOn, tv, true);
+        int colorOn = tv.data;
+        getTheme().resolveAttribute(R.attr.colorOff, tv, true);
+        int colorOff = tv.data;
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
+                .setSmallIcon(R.drawable.ic_cloud_upload_white_24dp)
+                .setGroup("AccessAttempt")
+                .setContentIntent(pi)
+                .setColor(colorOff)
+                .setOngoing(false)
+                .setAutoCancel(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            builder.setContentTitle(name)
+                    .setContentText(getString(R.string.msg_access_n));
+        else
+            builder.setContentTitle(getString(R.string.app_name))
+                    .setContentText(getString(R.string.msg_access, name));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            builder.setCategory(Notification.CATEGORY_STATUS)
+                    .setVisibility(Notification.VISIBILITY_SECRET);
+        }
+        DateFormat df = new SimpleDateFormat("dd HH:mm");
+        NotificationCompat.InboxStyle notification = new NotificationCompat.InboxStyle(builder);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+            notification.addLine(getString(R.string.msg_access_n));
+        else {
+            String sname = getString(R.string.msg_access, name);
+            int pos = sname.indexOf(name);
+            Spannable sp = new SpannableString(sname);
+            sp.setSpan(new StyleSpan(Typeface.BOLD), pos, pos + name.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            notification.addLine(sp);
+        }
+        Cursor cursor = DatabaseHelper.getInstance(ServiceSinkhole.this).getAccessUnset(uid, 7);
+        int colDAddr = cursor.getColumnIndex("daddr");
+        int colTime = cursor.getColumnIndex("time");
+        int colAllowed = cursor.getColumnIndex("allowed");
+        while (cursor.moveToNext()) {
+            StringBuilder sb = new StringBuilder();
+            sb.append(df.format(cursor.getLong(colTime))).append(' ');
+
+            String daddr = cursor.getString(colDAddr);
+            if (Util.isNumericAddress(daddr))
+                try {
+                    daddr = InetAddress.getByName(daddr).getHostName();
+                } catch (UnknownHostException ignored) {
+                }
+            sb.append(daddr);
+
+            int allowed = cursor.getInt(colAllowed);
+            if (allowed >= 0) {
+                int pos = sb.indexOf(daddr);
+                Spannable sp = new SpannableString(sb);
+                ForegroundColorSpan fgsp = new ForegroundColorSpan(allowed > 0 ? colorOn : colorOff);
+                sp.setSpan(fgsp, pos, pos + daddr.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                notification.addLine(sp);
+            } else
+                notification.addLine(sb);
+        }
+        cursor.close();
+
+        NotificationManagerCompat.from(this).notify(uid + 10000, notification.build());
     }
 
     private void removeWarningNotifications() {
